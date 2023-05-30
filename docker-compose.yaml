@@ -1,0 +1,30 @@
+version: '3.9'
+
+services:
+  app:
+    image: golang:latest
+    container_name: eth_fetcher
+    working_dir: /go/src/eth_fetcher
+    stdin_open: true
+    tty: true
+    volumes:
+      - .:/go/src/eth_fetcher
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+  postgres:
+    image: postgres:10.5
+    container_name: pg
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    ports:
+      - '5432:5432'
+    volumes:
+#      - .docker/pg/postgres-data:/var/lib/postgresql/data
+      # copy the sql script to create tables
+      - .docker/pg/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+
