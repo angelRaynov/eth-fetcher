@@ -7,43 +7,35 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"io"
 	"log"
+	"math/big"
 	"net/http"
 	"strings"
 )
 
-type TransactionDetails struct {
-	Jsonrpc string `json:"jsonrpc"`
+type TransactionReceipt struct {
+	JsonRPC string `json:"jsonrpc"`
 	ID      int    `json:"id"`
 	Result  struct {
 		TransactionHash string      `json:"transactionHash"`
-		Status          string      `json:"status"`
+		TransactionStatus          string      `json:"status"`
 		BlockHash       string      `json:"blockHash"`
 		BlockNumber     string      `json:"blockNumber"`
 		From            string      `json:"from"`
 		To              string      `json:"to"`
 		ContractAddress interface{} `json:"contractAddress"`
 		LogsCount       int
-		Logs            []struct {
-			TransactionHash  string   `json:"transactionHash"`
-			Address          string   `json:"address"`
-			BlockHash        string   `json:"blockHash"`
-			BlockNumber      string   `json:"blockNumber"`
-			Data             string   `json:"data"`
-			LogIndex         string   `json:"logIndex"`
-			Removed          bool     `json:"removed"`
-			Topics           []string `json:"topics"`
-			TransactionIndex string   `json:"transactionIndex"`
-		} `json:"logs"`
+		Logs            []interface{} `json:"logs"`
 
-		EffectiveGasPrice string `json:"effectiveGasPrice"`
-		CumulativeGasUsed string `json:"cumulativeGasUsed"`
-		GasUsed           string `json:"gasUsed"`
-		LogsBloom         string `json:"logsBloom"`
-		TransactionIndex  string `json:"transactionIndex"`
-		Type              string `json:"type"`
 	} `json:"result"`
+}
 
-	//TODO check how to populate input and value
+type TransactionByHash struct {
+	Jsonrpc string `json:"jsonrpc"`
+	ID      int    `json:"id"`
+	Result  struct {
+		Input            string `json:"input"`
+		Value            string `json:"value"`
+	} `json:"result"`
 }
 
 func main() {
@@ -78,13 +70,48 @@ func main() {
 		defer res.Body.Close()
 		body, _ := io.ReadAll(res.Body)
 
-		var resp TransactionDetails
+		var resp TransactionReceipt
 
 		err = json.Unmarshal(body, &resp)
+		resp.Result.LogsCount = len(resp.Result.Logs)
+
+		s = fmt.Sprintf("{\"id\":1,\"jsonrpc\":\"2.0\",\"params\":[\"%s\"],\"method\":\"eth_getTransactionByHash\"}", hash)
+		payload = strings.NewReader(s)
+		req, _ = http.NewRequest("POST", url, payload)
+
+		req.Header.Add("accept", "application/json")
+		req.Header.Add("content-type", "application/json")
+
+		res, _ = http.DefaultClient.Do(req)
+
+		defer res.Body.Close()
+		body, _ = io.ReadAll(res.Body)
+
+		var resp2 TransactionByHash
+
+		err = json.Unmarshal(body, &resp2)
+
 		fmt.Println("===========================================")
 		fmt.Printf("%v\n",resp.Result)
+		fmt.Printf("%v\n",resp2.Result)
+		value, err := decodeTransactionValue(resp2.Result.Value)
+		if err != nil {
+			fmt.Printf("Error: %v\n", err)
+		} else {
+			fmt.Printf("Decoded Value: %s\n", value.String())
+		}
 		fmt.Println("===========================================")
 
 	}
 
+}
+
+func decodeTransactionValue(valueHex string) (*big.Int, error) {
+	value := new(big.Int)
+	value, success := value.SetString(valueHex[2:], 16) // Remove the "0x" prefix
+	if !success {
+		return nil, fmt.Errorf("failed to decode value")
+	}
+
+	return value, nil
 }
