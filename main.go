@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -10,22 +11,23 @@ import (
 	"math/big"
 	"net/http"
 	"strings"
+
+	_ "github.com/lib/pq"
 )
 
 type TransactionReceipt struct {
 	JsonRPC string `json:"jsonrpc"`
 	ID      int    `json:"id"`
 	Result  struct {
-		TransactionHash string      `json:"transactionHash"`
-		TransactionStatus          string      `json:"status"`
-		BlockHash       string      `json:"blockHash"`
-		BlockNumber     string      `json:"blockNumber"`
-		From            string      `json:"from"`
-		To              string      `json:"to"`
-		ContractAddress interface{} `json:"contractAddress"`
-		LogsCount       int
-		Logs            []interface{} `json:"logs"`
-
+		TransactionHash   string `json:"transactionHash"`
+		TransactionStatus string `json:"status"`
+		BlockHash         string `json:"blockHash"`
+		BlockNumber       string `json:"blockNumber"`
+		From              string `json:"from"`
+		To                string `json:"to"`
+		ContractAddress   string `json:"contractAddress"`
+		LogsCount         int
+		Logs              []interface{} `json:"logs"`
 	} `json:"result"`
 }
 
@@ -33,12 +35,40 @@ type TransactionByHash struct {
 	Jsonrpc string `json:"jsonrpc"`
 	ID      int    `json:"id"`
 	Result  struct {
-		Input            string `json:"input"`
-		Value            string `json:"value"`
+		Input string `json:"input"`
+		Value string `json:"value"`
 	} `json:"result"`
 }
 
 func main() {
+	// Connection parameters
+	host := "postgres"
+	port := 5432
+	user := "postgres"
+	password := "postgres"
+	dbname := "transaction_data"
+
+	// Create the connection string
+	connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+		host, port, user, password, dbname)
+
+	// Open a connection to the database
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		fmt.Println("Failed to connect to the database:", err)
+		return
+	}
+	defer db.Close()
+
+	// Ping the database to check the connection
+	err = db.Ping()
+	if err != nil {
+		fmt.Println("Failed to ping the database:", err)
+		return
+	}
+
+	fmt.Println("Connected to the PostgreSQL database")
+
 	rlpEncodedData := "0xf90110b842307839623266366133633265316165643263636366393262613636366332326430353361643064386135646137616131666435343737646364363537376234353234b842307835613537653330353163623932653264343832353135623037653762336431383531373232613734363534363537626436346131346333396361336639636632b842307837316239653262343464343034393863303861363239383866616337373664306561633062356239363133633337663966366639613462383838613862303537b842307863356639366266316235346433333134343235643233373962643737643765643465363434663763366538343961373438333230323862333238643464373938"
 	rlpEncodedData = strings.TrimPrefix(rlpEncodedData, "0x")
 	encodedData, err := hex.DecodeString(rlpEncodedData)
@@ -91,16 +121,54 @@ func main() {
 
 		err = json.Unmarshal(body, &resp2)
 
-		fmt.Println("===========================================")
-		fmt.Printf("%v\n",resp.Result)
-		fmt.Printf("%v\n",resp2.Result)
 		value, err := decodeTransactionValue(resp2.Result.Value)
 		if err != nil {
 			fmt.Printf("Error: %v\n", err)
-		} else {
-			fmt.Printf("Decoded Value: %s\n", value.String())
 		}
-		fmt.Println("===========================================")
+		status, err := decodeTransactionValue(resp.Result.TransactionStatus)
+		if err != nil {
+			fmt.Printf("Error: %v\n", err)
+		}
+		// Sample data for the insert
+		transaction := Transaction{
+			TransactionHash:   resp.Result.TransactionHash,
+			TransactionStatus: status.String(),
+			BlockHash:         resp.Result.BlockHash,
+			BlockNumber:       resp.Result.BlockNumber,
+			From:              resp.Result.From,
+			To:                resp.Result.To,
+			ContractAddress:   resp.Result.ContractAddress,
+			LogsCount:         len(resp.Result.Logs),
+			Input:             resp2.Result.Input,
+			Value:             value.String(),
+		}
+		fmt.Printf("%#v\n", transaction)
+
+		stmt, err := db.Prepare("INSERT INTO transactions (transaction_hash, transaction_status, block_hash, block_number, sender, recipient, contract_address, logs_count, input,value) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)")
+		if err != nil {
+			fmt.Println("Failed to prepare SQL statement:", err)
+			return
+		}
+		defer stmt.Close()
+		// Execute the insert statement with the provided data
+		_, err = stmt.Exec(
+			transaction.TransactionHash,
+			transaction.TransactionStatus,
+			transaction.BlockHash,
+			transaction.BlockNumber,
+			transaction.From,
+			transaction.To,
+			transaction.ContractAddress,
+			transaction.LogsCount,
+			transaction.Input,
+			transaction.Value,
+		)
+		if err != nil {
+			fmt.Println("Failed to execute insert statement:", err)
+			return
+		}
+
+		fmt.Println("Insert successful")
 
 	}
 
@@ -114,4 +182,17 @@ func decodeTransactionValue(valueHex string) (*big.Int, error) {
 	}
 
 	return value, nil
+}
+
+type Transaction struct {
+	TransactionHash   string
+	TransactionStatus string
+	BlockHash         string
+	BlockNumber       string
+	From              string
+	To                string
+	ContractAddress   string
+	LogsCount         int
+	Input             string
+	Value             string
 }
