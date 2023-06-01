@@ -40,6 +40,7 @@ type TransactionByHash struct {
 	} `json:"result"`
 }
 
+// TODO optimize table definitions
 func main() {
 	// Connection parameters
 	host := "postgres"
@@ -172,6 +173,54 @@ func main() {
 
 	}
 
+	rows, err := db.Query("SELECT * FROM transactions")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer rows.Close()
+
+	// Slice to hold the result structs
+	var transactions []Transaction
+
+	// Iterate over the rows and retrieve the column values
+	for rows.Next() {
+		var transaction Transaction
+		err := rows.Scan(
+			&transaction.ID,
+			&transaction.TransactionHash,
+			&transaction.TransactionStatus,
+			&transaction.BlockHash,
+			&transaction.BlockNumber,
+			&transaction.From,
+			&transaction.To,
+			&transaction.ContractAddress,
+			&transaction.LogsCount,
+			&transaction.Input,
+			&transaction.Value,
+		)
+		if err != nil {
+			panic(err)
+		}
+
+		// Append the transaction to the slice
+		transactions = append(transactions, transaction)
+	}
+
+	// Check for any errors during iteration
+	if err := rows.Err(); err != nil {
+		log.Fatal(err)
+	}
+
+	// Print or process the retrieved transactions
+	res := struct {
+		Transactions []Transaction `json:"transactions"`
+	}{
+		Transactions: transactions,
+	}
+
+	r, _ := json.Marshal(res)
+	fmt.Printf("\n\n\n%v\n", string(r))
+
 }
 
 func decodeTransactionValue(valueHex string) (*big.Int, error) {
@@ -185,14 +234,15 @@ func decodeTransactionValue(valueHex string) (*big.Int, error) {
 }
 
 type Transaction struct {
-	TransactionHash   string
-	TransactionStatus string
-	BlockHash         string
-	BlockNumber       string
-	From              string
-	To                string
-	ContractAddress   string
-	LogsCount         int
-	Input             string
-	Value             string
+	ID                int `json:"id"`
+	TransactionHash   string `json:"transaction_hash"`
+	TransactionStatus string `json:"transaction_status"`
+	BlockHash         string `json:"block_hash"`
+	BlockNumber       string `json:"block_number"`
+	From              string `json:"sender"`
+	To                string `json:"recipient"`
+	ContractAddress   string `json:"contract_address"`
+	LogsCount         int `json:"logs_count"`
+	Input             string `json:"input"`
+	Value             string `json:"value"`
 }
