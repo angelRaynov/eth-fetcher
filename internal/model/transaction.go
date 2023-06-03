@@ -2,7 +2,7 @@ package model
 
 
 type Transaction struct {
-	ID                int `json:"id"`
+	ID                int `json:"id,omitempty"`
 	TransactionHash   string `json:"transaction_hash"`
 	TransactionStatus string `json:"transaction_status"`
 	BlockHash         string `json:"block_hash"`
@@ -15,6 +15,9 @@ type Transaction struct {
 	Value             string `json:"value"`
 }
 
+type Transactions struct {
+	Transactions []Transaction `json:"transactions"`
+}
 
 type TransactionReceipt struct {
 	JsonRPC string `json:"jsonrpc"`
