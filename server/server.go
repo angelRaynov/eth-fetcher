@@ -2,31 +2,33 @@ package server
 
 import (
 	"eth_fetcher/infrastructure/api"
+	"eth_fetcher/infrastructure/config"
 	"eth_fetcher/infrastructure/database"
+	"eth_fetcher/infrastructure/logger"
 	"eth_fetcher/internal/transaction/delivery/http"
 	"eth_fetcher/internal/transaction/repository"
 	"eth_fetcher/internal/transaction/usecase"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"log"
 )
 
 func Run() {
-	db := database.Init()
+	cfg := config.New()
+	l := logger.Init(cfg.AppMode)
+	db := database.Init(cfg, l)
 
-	alchemy := api.NewAlchemyAPI()
-	tr := repository.NewTransactionRepository(db)
-	tuc := usecase.NewTransactionUseCase(alchemy,tr)
-	h := http.NewTransactionHandler(tuc)
+	alchemy := api.NewAlchemyAPI(cfg, l)
+	tr := repository.NewTransactionRepository(db, l)
+	tuc := usecase.NewTransactionUseCase(alchemy, tr, l)
+	h := http.NewTransactionHandler(tuc, l)
 	router := gin.Default()
 
-	//todo use routing groups
 	router.GET("/lime/all", h.ListAllTransactions)
-	router.GET("/lime/eth/:rlphex",h.ListTransactionsByRLP)
+	router.GET("/lime/eth/:rlphex", h.ListTransactionsByRLP)
 
-	//todo extract port in env
-	log.Println("listening on port :%s", ":8080")
+	l.Infow("listening on port", "port", cfg.APIPort)
 
-	log.Fatal(router.Run(":8080"))
+	port := fmt.Sprintf(":%s", cfg.APIPort)
+	log.Fatal(router.Run(port))
 }
-
-

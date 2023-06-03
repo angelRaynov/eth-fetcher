@@ -2,98 +2,150 @@ package repository
 
 import (
 	"database/sql"
+	"eth_fetcher/infrastructure/logger"
 	"eth_fetcher/internal/model"
+	"eth_fetcher/internal/transaction/delivery/http"
 	"fmt"
-	"log"
+)
+
+const (
+	QueryFindByHash = `SELECT id, transaction_hash, transaction_status, block_hash, block_number, sender, recipient, contract_address, logs_count, input, value FROM transactions WHERE transaction_hash = $1 LIMIT 1`
+	QueryFindAll    = `SELECT id, transaction_hash, transaction_status, block_hash, block_number, sender, recipient, contract_address, logs_count, input, value  FROM transactions ORDER BY id OFFSET $1 LIMIT $2`
+	QueryInsert     = `INSERT INTO transactions (transaction_hash, transaction_status, block_hash, block_number, sender, recipient, contract_address, logs_count, input,value) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
+	QueryCount      = `SELECT COUNT(*) FROM transactions`
 )
 
 type transactionRepository struct {
 	db *sql.DB
+	l  logger.ILogger
 }
 
-func NewTransactionRepository(db *sql.DB) *transactionRepository {
+func NewTransactionRepository(db *sql.DB, l logger.ILogger) *transactionRepository {
 	return &transactionRepository{
 		db: db,
+		l:  l,
 	}
 }
 
-func (tr *transactionRepository) Store(transactions []model.Transaction) {
+func (tr *transactionRepository) Store(transaction model.Transaction) error {
 	err := tr.db.Ping()
 	if err != nil {
-		fmt.Println("Failed to ping the database:", err)
-		return
-	}
-		//TODO TRANSACTION HASH MUST BE UNIQUE TO AVOID DUPLICATES!!!
-	for _, transaction := range transactions {
-
-		stmt, err := tr.db.Prepare("INSERT INTO transactions (transaction_hash, transaction_status, block_hash, block_number, sender, recipient, contract_address, logs_count, input,value) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)")
-		if err != nil {
-			fmt.Println("Failed to prepare SQL statement:", err)
-			return
-		}
-		// Execute the insert statement with the provided data
-		_, err = stmt.Exec(
-			transaction.TransactionHash,
-			transaction.TransactionStatus,
-			transaction.BlockHash,
-			transaction.BlockNumber,
-			transaction.From,
-			transaction.To,
-			transaction.ContractAddress,
-			transaction.LogsCount,
-			transaction.Input,
-			transaction.Value,
-		)
-		stmt.Close()
-
-		if err != nil {
-			fmt.Println("Failed to execute insert statement:", err)
-		} else {
-			fmt.Println("Insert successful")
-		}
-
+		return fmt.Errorf("pinging database:%w", err)
 	}
 
+	stmt, err := tr.db.Prepare(QueryInsert)
+	if err != nil {
+		return fmt.Errorf("preparing insert statement:%w", err)
+	}
+
+	_, err = stmt.Exec(
+		transaction.TransactionHash,
+		transaction.TransactionStatus,
+		transaction.BlockHash,
+		transaction.BlockNumber,
+		transaction.From,
+		transaction.To,
+		transaction.ContractAddress,
+		transaction.LogsCount,
+		transaction.Input,
+		transaction.Value,
+	)
+
+	defer stmt.Close()
+
+	if err != nil {
+		return fmt.Errorf("executing insert statement:%w", err)
+	}
+
+	return nil
 }
 
-func (tr *transactionRepository) FindAll() []model.Transaction {
-	//TODO Read on batches
-	rows, err := tr.db.Query("SELECT * FROM transactions")
+func (tr *transactionRepository) FindAll() ([]model.Transaction, error) {
+	err := tr.db.Ping()
 	if err != nil {
-		log.Fatal(err)
+		tr.l.Errorw("pinging database", "error", err)
+		return nil, fmt.Errorf("pinging database:%w", err)
 	}
-	defer rows.Close()
 
-	// Slice to hold the result structs
 	var transactions []model.Transaction
 
-	// Iterate over the rows and retrieve the column values
-	for rows.Next() {
-		var transaction model.Transaction
-		err := rows.Scan(
-			&transaction.ID,
-			&transaction.TransactionHash,
-			&transaction.TransactionStatus,
-			&transaction.BlockHash,
-			&transaction.BlockNumber,
-			&transaction.From,
-			&transaction.To,
-			&transaction.ContractAddress,
-			&transaction.LogsCount,
-			&transaction.Input,
-			&transaction.Value,
-		)
-		if err != nil {
-			log.Fatal(err)
+	batchSize := 10
+	var totalCount int
+
+	err = tr.db.QueryRow(QueryCount).Scan(&totalCount)
+	if err != nil {
+		return nil, fmt.Errorf("counting records:%w", err)
+	}
+
+	if totalCount == 0 {
+		return nil, http.ErrNoRecords
+	}
+
+	for offset := 0; offset < totalCount; offset += batchSize {
+		// Calculate the remaining count to fetch
+		remainingCount := totalCount - offset
+		if remainingCount < batchSize {
+			batchSize = remainingCount
 		}
 
-		// Append the transaction to the slice
-		transactions = append(transactions, transaction)
+		// Fetch transactions in batches
+		rows, err := tr.db.Query(QueryFindAll, offset, batchSize)
+		if err != nil {
+			return nil, fmt.Errorf("finding records:%w", err)
+		}
+
+		for rows.Next() {
+			var transaction model.Transaction
+			err = rows.Scan(
+				&transaction.ID,
+				&transaction.TransactionHash,
+				&transaction.TransactionStatus,
+				&transaction.BlockHash,
+				&transaction.BlockNumber,
+				&transaction.From,
+				&transaction.To,
+				&transaction.ContractAddress,
+				&transaction.LogsCount,
+				&transaction.Input,
+				&transaction.Value,
+			)
+			if err != nil {
+				return nil, err
+			}
+			transactions = append(transactions, transaction)
+		}
+
+		rows.Close()
+
+		if len(transactions) < batchSize {
+			// Break the loop if the number of fetched transactions is less than the batch size
+			break
+		}
 	}
 
-	// Check for any errors during iteration
-	if err := rows.Err(); err != nil {
-		log.Fatal(err)
+	return transactions, nil
+}
+
+func (tr *transactionRepository) FindByHash(hash string) (model.Transaction, error) {
+	row := tr.db.QueryRow(QueryFindByHash, hash)
+
+	var transaction model.Transaction
+	err := row.Scan(
+		&transaction.ID,
+		&transaction.TransactionHash,
+		&transaction.TransactionStatus,
+		&transaction.BlockHash,
+		&transaction.BlockNumber,
+		&transaction.From,
+		&transaction.To,
+		&transaction.ContractAddress,
+		&transaction.LogsCount,
+		&transaction.Input,
+		&transaction.Value,
+	)
+	if err != nil {
+		return model.Transaction{}, err
 	}
-	return transactions
+
+	return transaction, nil
 }

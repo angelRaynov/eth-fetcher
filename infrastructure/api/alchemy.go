@@ -2,75 +2,111 @@ package api
 
 import (
 	"encoding/json"
+	"eth_fetcher/infrastructure/config"
+	"eth_fetcher/infrastructure/logger"
 	"eth_fetcher/internal/model"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 )
 
 type TransactionFetcher interface {
-	GetTransactionReceiptByHash(txHash string) *model.TransactionReceipt
-	GetTransactionByHash(txHash string) *model.TransactionByHash
+	GetTransactionReceiptByHash(txHash string) (*model.TransactionReceipt, error)
+	GetTransactionByHash(txHash string) (*model.TransactionByHash, error)
 }
 type alchemyAPI struct {
-
+	l      logger.ILogger
+	client *http.Client
+	cfg    *config.Application
 }
 
-func NewAlchemyAPI() *alchemyAPI {
-	return &alchemyAPI{}
+func NewAlchemyAPI(cfg *config.Application, l logger.ILogger) *alchemyAPI {
+	return &alchemyAPI{
+		l:   l,
+		cfg: cfg,
+	}
 }
 
-func (a *alchemyAPI) GetTransactionReceiptByHash(txHash string) *model.TransactionReceipt {
-	url := "https://eth-goerli.g.alchemy.com/v2/jEvj-KdZ92ZUmX01Jpegiu52fpgEpE8_"
+func (a *alchemyAPI) GetTransactionReceiptByHash(txHash string) (*model.TransactionReceipt, error) {
+	url := fmt.Sprintf("%s/%s", a.cfg.EthNodeURL, a.cfg.APIKey)
 
-	s := fmt.Sprintf("{\"id\":1,\"jsonrpc\":\"2.0\",\"params\":[\"%s\"],\"method\":\"eth_getTransactionReceipt\"}", txHash)
-	payload := strings.NewReader(s)
-	req, _ := http.NewRequest("POST", url, payload)
+	p := fmt.Sprintf("{\"id\":1,\"jsonrpc\":\"2.0\",\"params\":[\"%s\"],\"method\":\"eth_getTransactionReceipt\"}", txHash)
+
+	payload := strings.NewReader(p)
+	req, err := http.NewRequest("POST", url, payload)
+
+	if err != nil {
+		a.l.Warnw("assembling transaction receipt request", "url", url, "payload", p, "transaction_hash", txHash, "error", err)
+		return nil, fmt.Errorf("assembling transaction receipt request:%w", err)
+	}
 
 	req.Header.Add("accept", "application/json")
 	req.Header.Add("content-type", "application/json")
 
-	res, _ := http.DefaultClient.Do(req)
-
-	body, _ := io.ReadAll(res.Body)
-	defer res.Body.Close()
-
-	var resp model.TransactionReceipt
-
-	err := json.Unmarshal(body, &resp)
+	response, err := http.DefaultClient.Do(req)
 	if err != nil {
-		log.Fatal(err)
+		a.l.Warnw("requesting transaction receipt", "url", url, "payload", p, "transaction_hash", txHash, "error", err)
+		return nil, fmt.Errorf("requesting transaction receipt:%w", err)
 	}
-	resp.Result.LogsCount = len(resp.Result.Logs)
 
-	return &resp
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		a.l.Warnw("reading transaction receipt response", "url", url, "payload", p, "transaction_hash", txHash, "error", err)
+		return nil, fmt.Errorf("reading transaction receipt response:%w", err)
+	}
+
+	defer response.Body.Close()
+
+	var t model.TransactionReceipt
+
+	err = json.Unmarshal(body, &t)
+	if err != nil {
+		a.l.Warnw("unmarshalling transaction receipt result", "url", url, "payload", p, "transaction_hash", txHash, "error", err)
+		return nil, fmt.Errorf("unmarshaling transaction receipt result:%w", err)
+	}
+
+	t.Result.LogsCount = len(t.Result.Logs)
+
+	return &t, nil
 }
 
-func (a *alchemyAPI) GetTransactionByHash(txHash string) *model.TransactionByHash {
-	url := "https://eth-goerli.g.alchemy.com/v2/jEvj-KdZ92ZUmX01Jpegiu52fpgEpE8_"
+func (a *alchemyAPI) GetTransactionByHash(txHash string) (*model.TransactionByHash, error) {
+	url := fmt.Sprintf("%s/%s", a.cfg.EthNodeURL, a.cfg.APIKey)
 
-	s := fmt.Sprintf("{\"id\":1,\"jsonrpc\":\"2.0\",\"params\":[\"%s\"],\"method\":\"eth_getTransactionByHash\"}", txHash)
-	payload := strings.NewReader(s)
-	req, _ := http.NewRequest("POST", url, payload)
+	p := fmt.Sprintf("{\"id\":1,\"jsonrpc\":\"2.0\",\"params\":[\"%s\"],\"method\":\"eth_getTransactionByHash\"}", txHash)
+	payload := strings.NewReader(p)
+
+	req, err := http.NewRequest("POST", url, payload)
+	if err != nil {
+		a.l.Warnw("assembling transaction request", "url", url, "payload", p, "transaction_hash", txHash, "error", err)
+		return nil, fmt.Errorf("assembling transaction request:%w", err)
+	}
 
 	req.Header.Add("accept", "application/json")
 	req.Header.Add("content-type", "application/json")
 
-	res, _ := http.DefaultClient.Do(req)
-
-	body, err := io.ReadAll(res.Body)
+	response, err := http.DefaultClient.Do(req)
 	if err != nil {
-		log.Fatal(err)
+		a.l.Warnw("requesting transaction", "url", url, "payload", p, "transaction_hash", txHash, "error", err)
+		return nil, fmt.Errorf("requesting transaction:%w", err)
 	}
-	defer res.Body.Close()
 
-	var resp2 model.TransactionByHash
-
-	err = json.Unmarshal(body, &resp2)
+	body, err := io.ReadAll(response.Body)
 	if err != nil {
-		log.Fatal(err)
+		a.l.Warnw("reading transaction response", "url", url, "payload", p, "transaction_hash", txHash, "error", err)
+		return nil, fmt.Errorf("reading transaction response:%w", err)
 	}
-	return &resp2
+
+	defer response.Body.Close()
+
+	var t model.TransactionByHash
+
+	err = json.Unmarshal(body, &t)
+	if err != nil {
+		a.l.Warnw("unmarshalling transaction result", "url", url, "payload", p, "transaction_hash", txHash, "error", err)
+		return nil, fmt.Errorf("unmarshalling transaction result:%w", err)
+	}
+
+	return &t, nil
 }

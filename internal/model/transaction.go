@@ -1,8 +1,7 @@
 package model
 
-
 type Transaction struct {
-	ID                int `json:"id,omitempty"`
+	ID                int    `json:"id,omitempty"`
 	TransactionHash   string `json:"transaction_hash"`
 	TransactionStatus string `json:"transaction_status"`
 	BlockHash         string `json:"block_hash"`
@@ -10,7 +9,7 @@ type Transaction struct {
 	From              string `json:"sender"`
 	To                string `json:"recipient"`
 	ContractAddress   string `json:"contract_address"`
-	LogsCount         int `json:"logs_count"`
+	LogsCount         int    `json:"logs_count"`
 	Input             string `json:"input"`
 	Value             string `json:"value"`
 }

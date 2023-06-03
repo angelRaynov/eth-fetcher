@@ -2,76 +2,81 @@ package http
 
 import (
 	"encoding/hex"
+	"errors"
+	"eth_fetcher/infrastructure/logger"
 	"eth_fetcher/internal/model"
 	"eth_fetcher/internal/transaction"
-	"fmt"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gin-gonic/gin"
-	"log"
-	"math/big"
 	"net/http"
 	"strings"
 )
 
 type transactionHandler struct {
 	txUseCase transaction.Fetcher
+	l         logger.ILogger
 }
 
-func NewTransactionHandler(txUseCase transaction.Fetcher, ) *transactionHandler {
+func NewTransactionHandler(txUseCase transaction.Fetcher, l logger.ILogger) *transactionHandler {
 	return &transactionHandler{
 		txUseCase: txUseCase,
+		l:         l,
 	}
 }
 
-func (th *transactionHandler) ListTransactionsByRLP( c *gin.Context)  {
+func (th *transactionHandler) ListTransactionsByRLP(c *gin.Context) {
 	encodedRLP := c.Param("rlphex")
-
-	//rlpEncodedData := "0xf90110b842307839623266366133633265316165643263636366393262613636366332326430353361643064386135646137616131666435343737646364363537376234353234b842307835613537653330353163623932653264343832353135623037653762336431383531373232613734363534363537626436346131346333396361336639636632b842307837316239653262343464343034393863303861363239383866616337373664306561633062356239363133633337663966366639613462383838613862303537b842307863356639366266316235346433333134343235643233373962643737643765643465363434663763366538343961373438333230323862333238643464373938"
 	encodedRLP = strings.TrimPrefix(encodedRLP, "0x")
 	decoded, err := hex.DecodeString(encodedRLP)
 	if err != nil {
-		log.Fatal(err)
+		th.l.Infow("invalid rlp input", "rlp", encodedRLP, "error", err)
+
+		c.IndentedJSON(http.StatusBadRequest, ErrorResponse{
+			Message: "invalid rlp",
+		})
+		return
 	}
 
 	var transactionHashes []string
 
 	err = rlp.DecodeBytes(decoded, &transactionHashes)
 	if err != nil {
-		log.Fatal(err)
-	}
+		th.l.Infow("decoding rlp", "rlp_bytes", decoded, "error", err)
 
-	fmt.Printf("Hashes: %+v\n", transactionHashes)
+		c.IndentedJSON(http.StatusBadRequest, ErrorResponse{
+			Message: "invalid rlp",
+		})
+		return
+	}
 
 	txs := th.txUseCase.FetchBlockchainTransactionsByHashes(transactionHashes)
 
-
 	res := model.Transactions{
 		Transactions: txs,
 	}
 
+	th.l.Infow("transactions listed successfully", "rlp", encodedRLP)
 	c.IndentedJSON(http.StatusOK, res)
-
+	return
 }
 
 func (th *transactionHandler) ListAllTransactions(c *gin.Context) {
-
-	txs := th.txUseCase.ListRequestedTransactions()
+	txs, err := th.txUseCase.ListRequestedTransactions()
 	res := model.Transactions{
 		Transactions: txs,
 	}
 
-	c.IndentedJSON(http.StatusOK, res)
+	if err != nil {
+		th.l.Infow("listing all transactions", "error", err)
+		if errors.Is(err, ErrNoRecords) {
+			c.IndentedJSON(http.StatusNotFound, res)
+			return
+		}
 
-}
-
-func DecodeTransactionValue(valueHex string) (*big.Int, error) {
-	value := new(big.Int)
-	//todo use trim prefix
-	value, success := value.SetString(valueHex[2:], 16) // Remove the "0x" prefix
-	if !success {
-		return nil, fmt.Errorf("failed to decode value")
+		c.IndentedJSON(http.StatusInternalServerError, res)
+		return
 	}
 
-	return value, nil
+	c.IndentedJSON(http.StatusOK, res)
+	return
 }
-
