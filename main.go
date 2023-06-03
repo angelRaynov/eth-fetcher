@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"eth_fetcher/internal/model"
 	"fmt"
 	"github.com/ethereum/go-ethereum/rlp"
 	"io"
@@ -15,30 +16,7 @@ import (
 	_ "github.com/lib/pq"
 )
 
-type TransactionReceipt struct {
-	JsonRPC string `json:"jsonrpc"`
-	ID      int    `json:"id"`
-	Result  struct {
-		TransactionHash   string `json:"transactionHash"`
-		TransactionStatus string `json:"status"`
-		BlockHash         string `json:"blockHash"`
-		BlockNumber       string `json:"blockNumber"`
-		From              string `json:"from"`
-		To                string `json:"to"`
-		ContractAddress   string `json:"contractAddress"`
-		LogsCount         int
-		Logs              []interface{} `json:"logs"`
-	} `json:"result"`
-}
 
-type TransactionByHash struct {
-	Jsonrpc string `json:"jsonrpc"`
-	ID      int    `json:"id"`
-	Result  struct {
-		Input string `json:"input"`
-		Value string `json:"value"`
-	} `json:"result"`
-}
 
 // TODO optimize table definitions
 func main() {
@@ -101,7 +79,7 @@ func main() {
 		defer res.Body.Close()
 		body, _ := io.ReadAll(res.Body)
 
-		var resp TransactionReceipt
+		var resp model.TransactionReceipt
 
 		err = json.Unmarshal(body, &resp)
 		resp.Result.LogsCount = len(resp.Result.Logs)
@@ -118,7 +96,7 @@ func main() {
 		defer res.Body.Close()
 		body, _ = io.ReadAll(res.Body)
 
-		var resp2 TransactionByHash
+		var resp2 model.TransactionByHash
 
 		err = json.Unmarshal(body, &resp2)
 
@@ -131,7 +109,7 @@ func main() {
 			fmt.Printf("Error: %v\n", err)
 		}
 		// Sample data for the insert
-		transaction := Transaction{
+		transaction := model.Transaction{
 			TransactionHash:   resp.Result.TransactionHash,
 			TransactionStatus: status.String(),
 			BlockHash:         resp.Result.BlockHash,
@@ -180,11 +158,11 @@ func main() {
 	defer rows.Close()
 
 	// Slice to hold the result structs
-	var transactions []Transaction
+	var transactions []model.Transaction
 
 	// Iterate over the rows and retrieve the column values
 	for rows.Next() {
-		var transaction Transaction
+		var transaction model.Transaction
 		err := rows.Scan(
 			&transaction.ID,
 			&transaction.TransactionHash,
@@ -213,7 +191,7 @@ func main() {
 
 	// Print or process the retrieved transactions
 	res := struct {
-		Transactions []Transaction `json:"transactions"`
+		Transactions []model.Transaction `json:"transactions"`
 	}{
 		Transactions: transactions,
 	}
@@ -233,16 +211,3 @@ func decodeTransactionValue(valueHex string) (*big.Int, error) {
 	return value, nil
 }
 
-type Transaction struct {
-	ID                int `json:"id"`
-	TransactionHash   string `json:"transaction_hash"`
-	TransactionStatus string `json:"transaction_status"`
-	BlockHash         string `json:"block_hash"`
-	BlockNumber       string `json:"block_number"`
-	From              string `json:"sender"`
-	To                string `json:"recipient"`
-	ContractAddress   string `json:"contract_address"`
-	LogsCount         int `json:"logs_count"`
-	Input             string `json:"input"`
-	Value             string `json:"value"`
-}
