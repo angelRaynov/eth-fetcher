@@ -2,8 +2,6 @@ package http
 
 import (
 	"encoding/hex"
-	"encoding/json"
-	"eth_fetcher/infrastructure/database"
 	"eth_fetcher/internal/model"
 	"eth_fetcher/internal/transaction"
 	"fmt"
@@ -17,11 +15,13 @@ import (
 
 type transactionHandler struct {
 	txUseCase transaction.Fetcher
+	txRepo transaction.StoreFetcher
 }
 
-func NewTransactionHandler(txUseCase transaction.Fetcher) *transactionHandler {
+func NewTransactionHandler(txUseCase transaction.Fetcher, txRepo transaction.StoreFetcher) *transactionHandler {
 	return &transactionHandler{
 		txUseCase: txUseCase,
+		txRepo: txRepo,
 	}
 }
 
@@ -45,74 +45,74 @@ func (th *transactionHandler) ListTransactionsByRLP( c *gin.Context)  {
 	fmt.Printf("Hashes: %+v\n", transactionHashes)
 
 	txs := th.txUseCase.FetchBlockchainTransactionsByHashes(transactionHashes)
+
+	th.txRepo.Store(txs)
+
 	res := model.Transactions{
 		Transactions: txs,
 	}
-
-
 
 	c.IndentedJSON(http.StatusOK, res)
 
 }
 
 func (th *transactionHandler) ListAllTransactions(c *gin.Context) {
-	db := database.Init()
 	// Ping the database to check the connection
-	err := db.Ping()
-	if err != nil {
-		fmt.Println("Failed to ping the database:", err)
-		return
-	}
-
-	fmt.Println("Connected to the PostgreSQL database")
-
-
-
-	rows, err := db.Query("SELECT * FROM transactions")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer rows.Close()
-
-	// Slice to hold the result structs
-	var transactions []model.Transaction
-
-	// Iterate over the rows and retrieve the column values
-	for rows.Next() {
-		var transaction model.Transaction
-		err := rows.Scan(
-			&transaction.ID,
-			&transaction.TransactionHash,
-			&transaction.TransactionStatus,
-			&transaction.BlockHash,
-			&transaction.BlockNumber,
-			&transaction.From,
-			&transaction.To,
-			&transaction.ContractAddress,
-			&transaction.LogsCount,
-			&transaction.Input,
-			&transaction.Value,
-		)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		// Append the transaction to the slice
-		transactions = append(transactions, transaction)
-	}
-
-	// Check for any errors during iteration
-	if err := rows.Err(); err != nil {
-		log.Fatal(err)
-	}
-
-	// Print or process the retrieved transactions
-	res := model.Transactions{
-		Transactions: transactions,
-	}
-
-	r, _ := json.Marshal(res)
-	fmt.Printf("\n\n\n%v\n", string(r))
+	//err := db.Ping()
+	//if err != nil {
+	//	fmt.Println("Failed to ping the database:", err)
+	//	return
+	//}
+	//
+	//fmt.Println("Connected to the PostgreSQL database")
+	//
+	//
+	//
+	//rows, err := db.Query("SELECT * FROM transactions")
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
+	//defer rows.Close()
+	//
+	//// Slice to hold the result structs
+	//var transactions []model.Transaction
+	//
+	//// Iterate over the rows and retrieve the column values
+	//for rows.Next() {
+	//	var transaction model.Transaction
+	//	err := rows.Scan(
+	//		&transaction.ID,
+	//		&transaction.TransactionHash,
+	//		&transaction.TransactionStatus,
+	//		&transaction.BlockHash,
+	//		&transaction.BlockNumber,
+	//		&transaction.From,
+	//		&transaction.To,
+	//		&transaction.ContractAddress,
+	//		&transaction.LogsCount,
+	//		&transaction.Input,
+	//		&transaction.Value,
+	//	)
+	//	if err != nil {
+	//		log.Fatal(err)
+	//	}
+	//
+	//	// Append the transaction to the slice
+	//	transactions = append(transactions, transaction)
+	//}
+	//
+	//// Check for any errors during iteration
+	//if err := rows.Err(); err != nil {
+	//	log.Fatal(err)
+	//}
+	//
+	//// Print or process the retrieved transactions
+	//res := model.Transactions{
+	//	Transactions: transactions,
+	//}
+	//
+	//r, _ := json.Marshal(res)
+	//fmt.Printf("\n\n\n%v\n", string(r))
 }
 
 func DecodeTransactionValue(valueHex string) (*big.Int, error) {

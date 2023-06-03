@@ -2,16 +2,21 @@ package server
 
 import (
 	"eth_fetcher/infrastructure/api"
+	"eth_fetcher/infrastructure/database"
 	"eth_fetcher/internal/transaction/delivery/http"
+	"eth_fetcher/internal/transaction/repository"
 	"eth_fetcher/internal/transaction/usecase"
 	"github.com/gin-gonic/gin"
 	"log"
 )
 
 func Run() {
+	db := database.Init()
+
 	alchemy := api.NewAlchemyAPI()
 	tuc := usecase.NewTransactionUseCase(alchemy)
-	h := http.NewTransactionHandler(tuc)
+	tr := repository.NewTransactionRepository(db)
+	h := http.NewTransactionHandler(tuc, tr)
 	router := gin.Default()
 
 	//todo use routing groups
