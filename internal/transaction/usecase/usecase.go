@@ -3,17 +3,20 @@ package usecase
 import (
 	"eth_fetcher/infrastructure/api"
 	"eth_fetcher/internal/model"
+	"eth_fetcher/internal/transaction"
 	http2 "eth_fetcher/internal/transaction/delivery/http"
 	"fmt"
 )
 
 type transactionUseCase struct {
 	alchemy api.TransactionFetcher
+	txRepo transaction.StoreFinder
 }
 
-func NewTransactionUseCase(alchemyAPI api.TransactionFetcher) *transactionUseCase {
+func NewTransactionUseCase(alchemyAPI api.TransactionFetcher, txRepo transaction.StoreFinder) *transactionUseCase {
 	return &transactionUseCase{
 		alchemy: alchemyAPI,
+		txRepo: txRepo,
 	}
 }
 
@@ -43,7 +46,7 @@ func (tuc *transactionUseCase) FetchBlockchainTransactionsByHashes(transactionHa
 		}
 
 		// Sample data for the insert
-		transaction := model.Transaction{
+		tx := model.Transaction{
 			TransactionHash:   txReceipt.Result.TransactionHash,
 			TransactionStatus: status.String(),
 			BlockHash:         txReceipt.Result.BlockHash,
@@ -55,11 +58,21 @@ func (tuc *transactionUseCase) FetchBlockchainTransactionsByHashes(transactionHa
 			Input:             txByHash.Result.Input,
 			Value:             value.String(),
 		}
-		transactions = append(transactions, transaction)
+		transactions = append(transactions, tx)
 
 		//TODO TRANSACTION HASH MUST BE UNIQUE TO AVOID DUPLICATES!!!
 
 
 	}
+
+	//TODO probably split the fetch and store and call them here
+	tuc.txRepo.Store(transactions)
+
 	return transactions
+}
+
+func (tuc *transactionUseCase) ListRequestedTransactions() []model.Transaction {
+
+	return tuc.txRepo.FindAll()
+
 }

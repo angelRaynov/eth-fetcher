@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"eth_fetcher/internal/model"
 	"fmt"
+	"log"
 )
 
 type transactionRepository struct {
@@ -53,4 +54,46 @@ func (tr *transactionRepository) Store(transactions []model.Transaction) {
 
 	}
 
+}
+
+func (tr *transactionRepository) FindAll() []model.Transaction {
+	//TODO Read on batches
+	rows, err := tr.db.Query("SELECT * FROM transactions")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer rows.Close()
+
+	// Slice to hold the result structs
+	var transactions []model.Transaction
+
+	// Iterate over the rows and retrieve the column values
+	for rows.Next() {
+		var transaction model.Transaction
+		err := rows.Scan(
+			&transaction.ID,
+			&transaction.TransactionHash,
+			&transaction.TransactionStatus,
+			&transaction.BlockHash,
+			&transaction.BlockNumber,
+			&transaction.From,
+			&transaction.To,
+			&transaction.ContractAddress,
+			&transaction.LogsCount,
+			&transaction.Input,
+			&transaction.Value,
+		)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		// Append the transaction to the slice
+		transactions = append(transactions, transaction)
+	}
+
+	// Check for any errors during iteration
+	if err := rows.Err(); err != nil {
+		log.Fatal(err)
+	}
+	return transactions
 }

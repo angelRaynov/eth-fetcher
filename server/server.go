@@ -14,9 +14,9 @@ func Run() {
 	db := database.Init()
 
 	alchemy := api.NewAlchemyAPI()
-	tuc := usecase.NewTransactionUseCase(alchemy)
 	tr := repository.NewTransactionRepository(db)
-	h := http.NewTransactionHandler(tuc, tr)
+	tuc := usecase.NewTransactionUseCase(alchemy,tr)
+	h := http.NewTransactionHandler(tuc)
 	router := gin.Default()
 
 	//todo use routing groups
