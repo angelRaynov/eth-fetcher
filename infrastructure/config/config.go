@@ -35,5 +35,11 @@ func New() *Application {
 	}
 	config.DSN = dsn
 
+	key := os.Getenv("API_KEY")
+	if key == "" {
+		log.Fatal("API_KEY not set")
+	}
+	config.APIKey = key
+
 	return &config
 }

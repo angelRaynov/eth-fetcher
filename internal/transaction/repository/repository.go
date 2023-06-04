@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"eth_fetcher/infrastructure/logger"
 	"eth_fetcher/internal/model"
+	"eth_fetcher/internal/transaction"
 	"eth_fetcher/internal/transaction/delivery/http"
 	"fmt"
 )
@@ -20,14 +21,14 @@ type transactionRepository struct {
 	l  logger.ILogger
 }
 
-func NewTransactionRepository(db *sql.DB, l logger.ILogger) *transactionRepository {
+func NewTransactionRepository(db *sql.DB, l logger.ILogger) transaction.StoreFinder {
 	return &transactionRepository{
 		db: db,
 		l:  l,
 	}
 }
 
-func (tr *transactionRepository) Store(transaction model.Transaction) error {
+func (tr *transactionRepository) Store(transaction *model.Transaction) error {
 	err := tr.db.Ping()
 	if err != nil {
 		return fmt.Errorf("pinging database:%w", err)
@@ -60,14 +61,14 @@ func (tr *transactionRepository) Store(transaction model.Transaction) error {
 	return nil
 }
 
-func (tr *transactionRepository) FindAll() ([]model.Transaction, error) {
+func (tr *transactionRepository) FindAll() ([]*model.Transaction, error) {
 	err := tr.db.Ping()
 	if err != nil {
 		tr.l.Errorw("pinging database", "error", err)
 		return nil, fmt.Errorf("pinging database:%w", err)
 	}
 
-	var transactions []model.Transaction
+	var transactions []*model.Transaction
 
 	batchSize := 10
 	var totalCount int
@@ -95,24 +96,24 @@ func (tr *transactionRepository) FindAll() ([]model.Transaction, error) {
 		}
 
 		for rows.Next() {
-			var transaction model.Transaction
+			var tx model.Transaction
 			err = rows.Scan(
-				&transaction.ID,
-				&transaction.TransactionHash,
-				&transaction.TransactionStatus,
-				&transaction.BlockHash,
-				&transaction.BlockNumber,
-				&transaction.From,
-				&transaction.To,
-				&transaction.ContractAddress,
-				&transaction.LogsCount,
-				&transaction.Input,
-				&transaction.Value,
+				&tx.ID,
+				&tx.TransactionHash,
+				&tx.TransactionStatus,
+				&tx.BlockHash,
+				&tx.BlockNumber,
+				&tx.From,
+				&tx.To,
+				&tx.ContractAddress,
+				&tx.LogsCount,
+				&tx.Input,
+				&tx.Value,
 			)
 			if err != nil {
 				return nil, err
 			}
-			transactions = append(transactions, transaction)
+			transactions = append(transactions, &tx)
 		}
 
 		rows.Close()
@@ -126,26 +127,26 @@ func (tr *transactionRepository) FindAll() ([]model.Transaction, error) {
 	return transactions, nil
 }
 
-func (tr *transactionRepository) FindByHash(hash string) (model.Transaction, error) {
+func (tr *transactionRepository) FindByHash(hash string) (*model.Transaction, error) {
 	row := tr.db.QueryRow(QueryFindByHash, hash)
 
-	var transaction model.Transaction
+	var tx model.Transaction
 	err := row.Scan(
-		&transaction.ID,
-		&transaction.TransactionHash,
-		&transaction.TransactionStatus,
-		&transaction.BlockHash,
-		&transaction.BlockNumber,
-		&transaction.From,
-		&transaction.To,
-		&transaction.ContractAddress,
-		&transaction.LogsCount,
-		&transaction.Input,
-		&transaction.Value,
+		&tx.ID,
+		&tx.TransactionHash,
+		&tx.TransactionStatus,
+		&tx.BlockHash,
+		&tx.BlockNumber,
+		&tx.From,
+		&tx.To,
+		&tx.ContractAddress,
+		&tx.LogsCount,
+		&tx.Input,
+		&tx.Value,
 	)
 	if err != nil {
-		return model.Transaction{}, err
+		return &model.Transaction{}, err
 	}
 
-	return transaction, nil
+	return &tx, nil
 }

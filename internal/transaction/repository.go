@@ -8,10 +8,10 @@ type StoreFinder interface {
 }
 
 type Storer interface {
-	Store(transactions model.Transaction) error
+	Store(transactions *model.Transaction) error
 }
 
 type Finder interface {
-	FindAll() ([]model.Transaction, error)
-	FindByHash(hash string) (model.Transaction, error)
+	FindAll() ([]*model.Transaction, error)
+	FindByHash(hash string) (*model.Transaction, error)
 }

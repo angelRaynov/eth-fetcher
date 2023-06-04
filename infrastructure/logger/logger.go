@@ -16,14 +16,6 @@ type ILogger interface {
 	Warnw(string, ...interface{})
 	Debugw(string, ...interface{})
 	Fatalw(msg string, keysAndValues ...interface{})
-	//Info(...interface{})
-	//Error(...interface{})
-	//Warn(...interface{})
-	//Debug(...interface{})
-	//Infof(string, ...interface{})
-	//Errorf(string, ...interface{})
-	//Warnf(string, ...interface{})
-	//Debugf(string, ...interface{})
 }
 
 func Init(appMode string) *zap.SugaredLogger {

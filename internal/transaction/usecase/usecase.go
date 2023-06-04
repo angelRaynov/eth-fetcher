@@ -1,12 +1,14 @@
 package usecase
 
 import (
+	"errors"
 	"eth_fetcher/helper"
 	"eth_fetcher/infrastructure/api"
 	"eth_fetcher/infrastructure/logger"
 	"eth_fetcher/internal/model"
 	"eth_fetcher/internal/transaction"
 	"fmt"
+	"strconv"
 )
 
 type transactionUseCase struct {
@@ -15,7 +17,7 @@ type transactionUseCase struct {
 	l       logger.ILogger
 }
 
-func NewTransactionUseCase(alchemyAPI api.TransactionFetcher, txRepo transaction.StoreFinder, l logger.ILogger) *transactionUseCase {
+func NewTransactionUseCase(alchemyAPI api.TransactionFetcher, txRepo transaction.StoreFinder, l logger.ILogger) transaction.Fetcher {
 	return &transactionUseCase{
 		alchemy: alchemyAPI,
 		txRepo:  txRepo,
@@ -23,13 +25,14 @@ func NewTransactionUseCase(alchemyAPI api.TransactionFetcher, txRepo transaction
 	}
 }
 
-func (tuc *transactionUseCase) FetchBlockchainTransactionsByHashes(transactionHashes []string) []model.Transaction {
-	var transactions []model.Transaction
-
+func (tuc *transactionUseCase) FetchBlockchainTransactionsByHashes(transactionHashes []string) ([]*model.Transaction, error) {
+	var transactions []*model.Transaction
+	var errs error
 	for _, hash := range transactionHashes {
 		tuc.l.Debugw("fetching single transaction", "transaction_hash", hash)
 		tx, err := tuc.fetchSingleTransaction(hash)
 		if err != nil {
+			errs = errors.Join(errs, fmt.Errorf("fetch with tx hash %s:%w", hash, err))
 			tuc.l.Warnw("fetching single transaction", "error", err, "transaction_hash", hash)
 			continue
 		}
@@ -38,12 +41,10 @@ func (tuc *transactionUseCase) FetchBlockchainTransactionsByHashes(transactionHa
 
 	}
 
-	tuc.l.Infow("all transactions fetched successfully")
-
-	return transactions
+	return transactions, errs
 }
 
-func (tuc *transactionUseCase) ListRequestedTransactions() ([]model.Transaction, error) {
+func (tuc *transactionUseCase) ListRequestedTransactions() ([]*model.Transaction, error) {
 	res, err := tuc.txRepo.FindAll()
 	if err != nil {
 		tuc.l.Infow("finding all records", "error", err)
@@ -56,7 +57,7 @@ func (tuc *transactionUseCase) ListRequestedTransactions() ([]model.Transaction,
 
 }
 
-func (tuc *transactionUseCase) fetchSingleTransaction(hash string) (model.Transaction, error) {
+func (tuc *transactionUseCase) fetchSingleTransaction(hash string) (*model.Transaction, error) {
 	tx, err := tuc.txRepo.FindByHash(hash)
 	if err == nil {
 		tuc.l.Debugw("transaction found in db, skip request", "transaction_hash", hash)
@@ -66,45 +67,19 @@ func (tuc *transactionUseCase) fetchSingleTransaction(hash string) (model.Transa
 	txReceipt, err := tuc.alchemy.GetTransactionReceiptByHash(hash)
 	if err != nil {
 		tuc.l.Warnw("getting transaction receipt by hash", "transaction_hash", hash, "error", err)
-		return model.Transaction{}, err
-	}
-
-	status, err := helper.DecodeHexBigInt(txReceipt.Result.TransactionStatus)
-	if err != nil {
-		tuc.l.Warnw("decoding hex status", "transaction_hash", hash, "error", err, "hex_status", txReceipt.Result.TransactionStatus)
-		return model.Transaction{}, err
+		return &model.Transaction{}, err
 	}
 
 	txByHash, err := tuc.alchemy.GetTransactionByHash(hash)
 	if err != nil {
 		tuc.l.Warnw("getting transaction by hash", "transaction_hash", hash, "error", err)
-		return model.Transaction{}, err
+		return &model.Transaction{}, err
 	}
 
-	value, err := helper.DecodeHexBigInt(txByHash.Result.Value)
+	tx, err = prepareTxData(txReceipt, txByHash)
 	if err != nil {
-		tuc.l.Warnw("decoding hex value", "transaction_hash", hash, "error", err, "hex_value", txByHash.Result.Value)
-		return model.Transaction{}, err
-	}
-
-	blockNumber, err := helper.DecodeHexBigInt(txReceipt.Result.BlockNumber)
-	if err != nil {
-		tuc.l.Warnw("decoding hex block number", "transaction_hash", hash, "error", err, "hex_value", txReceipt.Result.BlockNumber)
-		return model.Transaction{}, err
-	}
-
-	// Sample data for the insert
-	tx = model.Transaction{
-		TransactionHash:   txReceipt.Result.TransactionHash,
-		TransactionStatus: status.String(),
-		BlockHash:         txReceipt.Result.BlockHash,
-		BlockNumber:       blockNumber.String(),
-		From:              txReceipt.Result.From,
-		To:                txReceipt.Result.To,
-		ContractAddress:   txReceipt.Result.ContractAddress,
-		LogsCount:         len(txReceipt.Result.Logs),
-		Input:             txByHash.Result.Input,
-		Value:             value.String(),
+		tuc.l.Warnw("preparing data for insert", "transaction_hash", hash, "error", err)
+		return &model.Transaction{}, err
 	}
 
 	err = tuc.txRepo.Store(tx)
@@ -113,4 +88,46 @@ func (tuc *transactionUseCase) fetchSingleTransaction(hash string) (model.Transa
 	}
 
 	return tx, nil
+}
+
+func prepareTxData(txReceipt *model.TransactionReceipt, txByHash *model.TransactionByHash) (*model.Transaction, error) {
+	var errs error
+
+	status, err := helper.DecodeHexBigInt(txReceipt.Result.TransactionStatus)
+	if err != nil {
+		errs = errors.Join(errs, fmt.Errorf("decoding hex status:%w", err))
+	}
+
+	intStatus, err := strconv.ParseInt(status.String(), 10, 8)
+	if err != nil {
+		errs = errors.Join(errs, fmt.Errorf("converting string status:%w", err))
+	}
+
+	value, err := helper.DecodeHexBigInt(txByHash.Result.Value)
+	if err != nil {
+		errs = errors.Join(errs, fmt.Errorf("decoding hex value:%w", err))
+	}
+
+	blockNumber, err := helper.DecodeHexBigInt(txReceipt.Result.BlockNumber)
+	if err != nil {
+		errs = errors.Join(errs, fmt.Errorf("decoding hex block number:%w", err))
+	}
+
+	intBlockNumber, err := strconv.ParseInt(blockNumber.String(), 10, 64)
+	if err != nil {
+		errs = errors.Join(errs, fmt.Errorf("converting string block number:%w", err))
+	}
+
+	return &model.Transaction{
+		TransactionHash:   txReceipt.Result.TransactionHash,
+		TransactionStatus: int8(intStatus),
+		BlockHash:         txReceipt.Result.BlockHash,
+		BlockNumber:       intBlockNumber,
+		From:              txReceipt.Result.From,
+		To:                txReceipt.Result.To,
+		ContractAddress:   txReceipt.Result.ContractAddress,
+		LogsCount:         len(txReceipt.Result.Logs),
+		Input:             txByHash.Result.Input,
+		Value:             value.String(),
+	}, err
 }

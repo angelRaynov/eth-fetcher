@@ -9,7 +9,7 @@ import (
 func DecodeHexBigInt(valueHex string) (*big.Int, error) {
 	valueHex = strings.TrimPrefix(valueHex, "0x")
 	value := new(big.Int)
-	value, success := value.SetString(valueHex, 16) // Remove the "0x" prefix
+	value, success := value.SetString(valueHex, 16)
 	if !success {
 		return nil, fmt.Errorf("failed to decode value")
 	}

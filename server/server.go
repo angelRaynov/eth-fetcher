@@ -24,8 +24,8 @@ func Run() {
 	h := http.NewTransactionHandler(tuc, l)
 	router := gin.Default()
 
-	router.GET("/lime/all", h.ListAllTransactions)
-	router.GET("/lime/eth/:rlphex", h.ListTransactionsByRLP)
+	router.GET("/lime/all", h.ExploreAllTransactions)
+	router.GET("/lime/eth/:rlphex", h.ExploreTransactionsByRLP)
 
 	l.Infow("listening on port", "port", cfg.APIPort)
 

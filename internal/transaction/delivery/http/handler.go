@@ -17,14 +17,14 @@ type transactionHandler struct {
 	l         logger.ILogger
 }
 
-func NewTransactionHandler(txUseCase transaction.Fetcher, l logger.ILogger) *transactionHandler {
+func NewTransactionHandler(txUseCase transaction.Fetcher, l logger.ILogger) transaction.Explorer {
 	return &transactionHandler{
 		txUseCase: txUseCase,
 		l:         l,
 	}
 }
 
-func (th *transactionHandler) ListTransactionsByRLP(c *gin.Context) {
+func (th *transactionHandler) ExploreTransactionsByRLP(c *gin.Context) {
 	encodedRLP := c.Param("rlphex")
 	encodedRLP = strings.TrimPrefix(encodedRLP, "0x")
 	decoded, err := hex.DecodeString(encodedRLP)
@@ -49,7 +49,10 @@ func (th *transactionHandler) ListTransactionsByRLP(c *gin.Context) {
 		return
 	}
 
-	txs := th.txUseCase.FetchBlockchainTransactionsByHashes(transactionHashes)
+	txs, err := th.txUseCase.FetchBlockchainTransactionsByHashes(transactionHashes)
+	if err != nil {
+		th.l.Infow("fetching transaction errors", "error", err)
+	}
 
 	res := model.Transactions{
 		Transactions: txs,
@@ -60,7 +63,7 @@ func (th *transactionHandler) ListTransactionsByRLP(c *gin.Context) {
 	return
 }
 
-func (th *transactionHandler) ListAllTransactions(c *gin.Context) {
+func (th *transactionHandler) ExploreAllTransactions(c *gin.Context) {
 	txs, err := th.txUseCase.ListRequestedTransactions()
 	res := model.Transactions{
 		Transactions: txs,

@@ -15,7 +15,7 @@ services:
     environment:
       - API_PORT=8080
       - ETH_NODE_URL=https://eth-goerli.g.alchemy.com/v2
-      - DB_CONNECTION_URL=postgres://postgres:postgres@postgres:5432/transaction_data?sslmode=disable
+      - DB_CONNECTION_URL=postgres://postgres:postgres@postgres:5432/postgres?sslmode=disable
       - API_KEY=jEvj-KdZ92ZUmX01Jpegiu52fpgEpE8_
     depends_on:
       - postgres
