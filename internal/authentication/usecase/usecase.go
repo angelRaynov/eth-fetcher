@@ -1,28 +1,30 @@
 package usecase
 
 import (
+	"eth_fetcher/infrastructure/config"
 	"eth_fetcher/infrastructure/logger"
-	"eth_fetcher/internal/authentication/repository"
+	"eth_fetcher/internal/authentication"
 	"eth_fetcher/internal/model"
 	"github.com/golang-jwt/jwt"
 	"golang.org/x/crypto/bcrypt"
 	"log"
 )
 
-//todo use interface and make private
-type AuthUseCase struct {
+type authUseCase struct {
 	l logger.ILogger
-	ar *repository.AuthRepository
+	ar authentication.PasswordGetter
+	cfg *config.Application
 }
 
-func NewAuthUseCase(l logger.ILogger, ar *repository.AuthRepository) *AuthUseCase {
-	return &AuthUseCase{
+func NewAuthUseCase(cfg *config.Application,l logger.ILogger, ar authentication.PasswordGetter) authentication.JWTGenerator {
+	return &authUseCase{
 		l: l,
 		ar: ar,
+		cfg: cfg,
 	}
 }
 
-func (au *AuthUseCase)GenerateJWT(creds model.Credentials) (string, error) {
+func (au *authUseCase)GenerateJWT(creds model.Credentials) (string, error) {
 	hashedPW, err := au.ar.GetUserPassword(creds.Username)
 	if err != nil {
 		log.Fatal("get pass:",err)
@@ -40,10 +42,6 @@ func (au *AuthUseCase)GenerateJWT(creds model.Credentials) (string, error) {
 	claims := token.Claims.(jwt.MapClaims)
 	claims["username"] = creds.Username
 
-	// TODO: Add additional claims or custom data to the token if needed
-
-	// Sign the token with a secret key
-	// Replace "secret" with your own secret key
-	return token.SignedString([]byte("secret"))
+	return token.SignedString([]byte(au.cfg.JWTSecret))
 
 }

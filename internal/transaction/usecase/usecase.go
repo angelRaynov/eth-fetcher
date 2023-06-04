@@ -138,7 +138,7 @@ func (tuc *transactionUseCase) CreateTransactionHistory(user string, transaction
 		if err != nil {
 			tuc.l.Warnw("storing hash per user", "error", err, "transaction_hash", hash, "username", user)
 		}
-		tuc.l.Infow("storing hash per user",  "transaction_hash", hash, "username", user)
+		tuc.l.Debugw("storing hash per user",  "transaction_hash", hash, "username", user)
 	}
 }
 

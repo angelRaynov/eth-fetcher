@@ -2,7 +2,7 @@ package http
 
 import (
 	"eth_fetcher/infrastructure/logger"
-	"eth_fetcher/internal/authentication/usecase"
+	"eth_fetcher/internal/authentication"
 	"eth_fetcher/internal/model"
 	"fmt"
 	"github.com/gin-gonic/gin"
@@ -12,10 +12,10 @@ import (
 
 type authHandler struct {
 	l           logger.ILogger
-	authUseCase *usecase.AuthUseCase
+	authUseCase authentication.JWTGenerator
 }
 
-func NewAuthHandler(l logger.ILogger, authUsecase *usecase.AuthUseCase) *authHandler {
+func NewAuthHandler(l logger.ILogger, authUsecase authentication.JWTGenerator) authentication.Authenticator {
 	return &authHandler{
 		l: l,
 		authUseCase: authUsecase,

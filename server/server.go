@@ -34,14 +34,14 @@ func Run() {
 
 	//auth
 	ar := repository2.NewAuthRepository(db)
-	auc := usecase2.NewAuthUseCase(l,ar)
+	auc := usecase2.NewAuthUseCase(cfg,l,ar)
 	ah := http2.NewAuthHandler(l, auc)
 
 	router := gin.Default()
 	limeAPI := router.Group("/lime")
 	limeAPI.GET("/all", h.ExploreAllTransactions)
-	limeAPI.GET("/eth/:rlphex",AuthMiddleware(), h.ExploreTransactionsByRLP)
-	limeAPI.GET("/my",AuthMiddleware(), h.ShowTransactionHistory)
+	limeAPI.GET("/eth/:rlphex",AuthMiddleware(cfg), h.ExploreTransactionsByRLP)
+	limeAPI.GET("/my",AuthMiddleware(cfg), h.ShowTransactionHistory)
 	limeAPI.POST("/authenticate",ah.Authenticate)
 
 

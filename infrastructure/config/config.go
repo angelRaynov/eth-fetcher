@@ -12,6 +12,8 @@ type Application struct {
 	EthNodeURL string
 
 	DSN string
+
+	JWTSecret string
 }
 
 func New() *Application {
@@ -40,6 +42,12 @@ func New() *Application {
 		log.Fatal("API_KEY not set")
 	}
 	config.APIKey = key
+
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		log.Fatal("JWT_SECRET not set")
+	}
+	config.JWTSecret = key
 
 	return &config
 }

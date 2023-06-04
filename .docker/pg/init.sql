@@ -20,10 +20,14 @@ CREATE TABLE users (
 );
 
 INSERT INTO users (username, password) VALUES ('alice', '$2a$10$K01poobswi.hbfUiJG9go.kQRgpZ6kWRlJFJrjH1/iiqJJJEwlTv6');
+INSERT INTO users (username, password) VALUES ('bob', '$2a$10$J2uuNk6KC4l/qia/XcxDBOJkTM7EqHusIukrQY4KfET617cy1rPpW');
+INSERT INTO users (username, password) VALUES ('carol', '$2a$10$/K5q5phzlps4IA84EgsMB.tGVrA7UDszkndI0.d80lMLEc6hrnEr6');
+INSERT INTO users (username, password) VALUES ('dave', '$2a$10$h/Nbf8Rezyv3etqwBq7cSeg/IBN.YDJ0lP54fKQ95XqLbPx79W7bK');
 
 
 CREATE TABLE transaction_history (
+                                     id SERIAL PRIMARY KEY,
                                      username VARCHAR(50) NOT NULL,
-                                     transaction_hash CHAR(66) NOT NULL PRIMARY KEY
+                                     transaction_hash CHAR(66) NOT NULL
 );
 CREATE INDEX idx_username ON transaction_history (username);
