@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"eth_fetcher/infrastructure/api"
 	"eth_fetcher/infrastructure/config"
 	"eth_fetcher/infrastructure/database"
@@ -13,7 +14,10 @@ import (
 	"eth_fetcher/internal/transaction/usecase"
 	"fmt"
 	"github.com/gin-gonic/gin"
-	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"time"
 )
 
 func Run() {
@@ -22,22 +26,53 @@ func Run() {
 	db := database.Init(cfg, l)
 
 	alchemy := api.NewAlchemyAPI(cfg, l)
+
+	//transactions
 	tr := repository.NewTransactionRepository(db)
 	tuc := usecase.NewTransactionUseCase(alchemy, tr, l)
 	h := httpHandler.NewTransactionHandler(tuc, l)
-	router := gin.Default()
 
-	router.GET("/lime/all", h.ExploreAllTransactions)
-	router.GET("/lime/eth/:rlphex",AuthMiddleware(), h.ExploreTransactionsByRLP)
-	router.GET("/lime/my",AuthMiddleware(), h.ShowTransactionHistory)
-
+	//auth
 	ar := repository2.NewAuthRepository(db)
 	auc := usecase2.NewAuthUseCase(l,ar)
 	ah := http2.NewAuthHandler(l, auc)
-	router.POST("/lime/authenticate",ah.Authenticate)
-	l.Infow("listening on port", "port", cfg.APIPort)
+
+	router := gin.Default()
+	limeAPI := router.Group("/lime")
+	limeAPI.GET("/all", h.ExploreAllTransactions)
+	limeAPI.GET("/eth/:rlphex",AuthMiddleware(), h.ExploreTransactionsByRLP)
+	limeAPI.GET("/my",AuthMiddleware(), h.ShowTransactionHistory)
+	limeAPI.POST("/authenticate",ah.Authenticate)
+
 
 	port := fmt.Sprintf(":%s", cfg.APIPort)
-	log.Fatal(router.Run(port))
+
+	server := &http.Server{
+		Addr:    port,
+		Handler: router,
+	}
+
+	go func() {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			l.Fatalf("Server failed to start: %v", err)
+		}
+		l.Infow("listening on port", "port", cfg.APIPort)
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt)
+	<-quit
+
+	// Create a context with a timeout for graceful shutdown
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Shutdown the server gracefully
+	if err := server.Shutdown(ctx); err != nil {
+		l.Info("here")
+		l.Fatal("Server shutdown failed: %v", err)
+	}
+
+	l.Info("Server stopped gracefully")
 }
 
