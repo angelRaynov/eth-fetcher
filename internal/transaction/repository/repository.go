@@ -9,11 +9,13 @@ import (
 )
 
 const (
-	QueryFindByHash = `SELECT id, transaction_hash, transaction_status, block_hash, block_number, sender, recipient, contract_address, logs_count, input, value FROM transactions WHERE transaction_hash = $1 LIMIT 1`
-	QueryFindAll    = `SELECT id, transaction_hash, transaction_status, block_hash, block_number, sender, recipient, contract_address, logs_count, input, value  FROM transactions ORDER BY id OFFSET $1 LIMIT $2`
-	QueryInsert     = `INSERT INTO transactions (transaction_hash, transaction_status, block_hash, block_number, sender, recipient, contract_address, logs_count, input,value) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
-	QueryInsertHash     = `INSERT INTO transaction_history (username, transaction_hash) VALUES ($1, $2)`
-	QueryCount      = `SELECT COUNT(*) FROM transactions`
+	QueryFindByHash            = `SELECT id, transaction_hash, transaction_status, block_hash, block_number, sender, recipient, contract_address, logs_count, input, value FROM transactions WHERE transaction_hash = $1 LIMIT 1`
+	QueryFindAll               = `SELECT id, transaction_hash, transaction_status, block_hash, block_number, sender, recipient, contract_address, logs_count, input, value  FROM transactions ORDER BY id OFFSET $1 LIMIT $2`
+	QueryInsert                = `INSERT INTO transactions (transaction_hash, transaction_status, block_hash, block_number, sender, recipient, contract_address, logs_count, input,value) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
+	QueryInsertHash            = `INSERT INTO transaction_history (username, transaction_hash) VALUES ($1, $2)`
+	QueryCount                 = `SELECT COUNT(*) FROM transactions`
+	QueryRequestedTransactions = `SELECT transaction_hash FROM transaction_history WHERE username = $1`
+	QueryTransactionExist = `SELECT COUNT(*) FROM transaction_history WHERE username = $1 AND transaction_hash = $2`
 )
 
 type transactionRepository struct {
@@ -27,11 +29,6 @@ func NewTransactionRepository(db *sql.DB) transaction.StoreFinder {
 }
 
 func (tr *transactionRepository) Store(transaction *model.Transaction) error {
-	err := tr.db.Ping()
-	if err != nil {
-		return fmt.Errorf("pinging database:%w", err)
-	}
-
 	stmt, err := tr.db.Prepare(QueryInsert)
 	if err != nil {
 		return fmt.Errorf("preparing insert statement:%w", err)
@@ -59,10 +56,10 @@ func (tr *transactionRepository) Store(transaction *model.Transaction) error {
 	return nil
 }
 
-func (tr *transactionRepository) StoreHashesPerUser(user,hash string) error {
-	err := tr.db.Ping()
-	if err != nil {
-		return fmt.Errorf("pinging database:%w", err)
+func (tr *transactionRepository) StoreHashesPerUser(user, hash string) error {
+	exist := tr.checkTransactionExists(user,hash)
+	if exist {
+		return nil
 	}
 
 	stmt, err := tr.db.Prepare(QueryInsertHash)
@@ -165,4 +162,37 @@ func (tr *transactionRepository) FindByHash(hash string) (*model.Transaction, er
 	}
 
 	return &tx, nil
+}
+
+func (tr *transactionRepository) FindTransactionHashesPerUser(user string) ([]string, error) {
+	var transactionHashes []string
+
+	rows, err := tr.db.Query(QueryRequestedTransactions,user)
+	if err != nil {
+		return nil, fmt.Errorf("finding records:%w", err)
+	}
+
+	var hash string
+	for rows.Next() {
+		err = rows.Scan(&hash)
+		if err != nil {
+			return nil, err
+		}
+		transactionHashes = append(transactionHashes, hash)
+	}
+
+	defer rows.Close()
+
+	return transactionHashes, nil
+}
+
+func (tr *transactionRepository) checkTransactionExists(user, hash string) bool {
+	var count int
+
+	err := tr.db.QueryRow(QueryTransactionExist, user, hash).Scan(&count)
+	if err != nil {
+		return false
+	}
+
+	return count > 0
 }

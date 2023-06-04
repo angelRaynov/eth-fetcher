@@ -15,4 +15,5 @@ type Storer interface {
 type Finder interface {
 	FindAll() ([]*model.Transaction, error)
 	FindByHash(hash string) (*model.Transaction, error)
+	FindTransactionHashesPerUser(user string) ([]string, error)
 }

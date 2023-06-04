@@ -29,6 +29,7 @@ func Run() {
 
 	router.GET("/lime/all", h.ExploreAllTransactions)
 	router.GET("/lime/eth/:rlphex",AuthMiddleware(), h.ExploreTransactionsByRLP)
+	router.GET("/lime/my",AuthMiddleware(), h.ShowTransactionHistory)
 
 	ar := repository2.NewAuthRepository(db)
 	auc := usecase2.NewAuthUseCase(l,ar)

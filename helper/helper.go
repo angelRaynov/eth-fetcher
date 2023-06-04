@@ -2,6 +2,7 @@ package helper
 
 import (
 	"fmt"
+	"github.com/gin-gonic/gin"
 	"math/big"
 	"strings"
 )
@@ -15,4 +16,15 @@ func DecodeHexBigInt(valueHex string) (*big.Int, error) {
 	}
 
 	return value, nil
+}
+
+func GetUserFromContext(c *gin.Context) string {
+	if user, ok := c.Get("username"); ok {
+		username, isString := user.(string)
+		if isString {
+			return username
+		}
+		return ""
+	}
+	return ""
 }

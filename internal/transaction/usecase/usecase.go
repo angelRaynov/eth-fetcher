@@ -141,3 +141,13 @@ func (tuc *transactionUseCase) CreateTransactionHistory(user string, transaction
 		tuc.l.Infow("storing hash per user",  "transaction_hash", hash, "username", user)
 	}
 }
+
+func (tuc *transactionUseCase) GetTransactionHistory(user string) ([]string, error) {
+		transactionHashes, err := tuc.txRepo.FindTransactionHashesPerUser(user)
+		if err != nil {
+			tuc.l.Warnw("finding transactions per user", "error", err,"username", user)
+			return nil, fmt.Errorf("finding transactions per user:%w",err)
+		}
+
+		return transactionHashes,nil
+}

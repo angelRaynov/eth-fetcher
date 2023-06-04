@@ -17,3 +17,8 @@ type Transaction struct {
 type Transactions struct {
 	Transactions []*Transaction `json:"transactions"`
 }
+
+type TransactionsPerUser struct {
+	TransactionHash   string `json:"transaction_hash"`
+	Value             string `json:"value"`
+}

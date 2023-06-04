@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/hex"
 	"errors"
+	"eth_fetcher/helper"
 	"eth_fetcher/infrastructure/logger"
 	"eth_fetcher/internal/model"
 	"eth_fetcher/internal/transaction"
@@ -65,7 +66,6 @@ func (th *transactionHandler) ExploreTransactionsByRLP(c *gin.Context) {
 		Transactions: txs,
 	}
 
-
 	th.l.Infow("transactions listed successfully", "rlp", encodedRLP)
 	c.IndentedJSON(http.StatusOK, res)
 
@@ -90,5 +90,37 @@ func (th *transactionHandler) ExploreAllTransactions(c *gin.Context) {
 	}
 
 	c.IndentedJSON(http.StatusOK, res)
+	return
+}
+
+func (th *transactionHandler) ShowTransactionHistory(c *gin.Context) {
+	username := helper.GetUserFromContext(c)
+	if username == "" {
+		c.IndentedJSON(http.StatusBadRequest, ErrorResponse{
+			Message: "invalid user",
+		})
+		return
+	}
+
+	transactionHashes, err := th.txUseCase.GetTransactionHistory(username)
+	if err != nil {
+		c.IndentedJSON(http.StatusInternalServerError, model.Transactions{
+			Transactions: nil,
+		})
+		return
+	}
+
+	txs, err := th.txUseCase.FetchBlockchainTransactionsByHashes(transactionHashes)
+	if err != nil {
+		th.l.Infow("fetching transaction errors", "error", err)
+	}
+
+	res := model.Transactions{
+		Transactions: txs,
+	}
+
+	th.l.Infow("transactions history listed successfully", "user", username)
+	c.IndentedJSON(http.StatusOK, res)
+
 	return
 }
