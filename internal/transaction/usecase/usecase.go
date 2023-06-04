@@ -131,3 +131,13 @@ func prepareTxData(txReceipt *model.TransactionReceipt, txByHash *model.Transact
 		Value:             value.String(),
 	}, err
 }
+
+func (tuc *transactionUseCase) CreateTransactionHistory(user string, transactionHashes []string) {
+	for _, hash := range transactionHashes {
+		err := tuc.txRepo.StoreHashesPerUser(user, hash)
+		if err != nil {
+			tuc.l.Warnw("storing hash per user", "error", err, "transaction_hash", hash, "username", user)
+		}
+		tuc.l.Infow("storing hash per user",  "transaction_hash", hash, "username", user)
+	}
+}

@@ -2,7 +2,6 @@ package repository
 
 import (
 	"database/sql"
-	"eth_fetcher/infrastructure/logger"
 	"fmt"
 )
 

@@ -6,10 +6,8 @@ import (
 	"eth_fetcher/infrastructure/logger"
 	"eth_fetcher/internal/model"
 	"eth_fetcher/internal/transaction"
-	"fmt"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt"
 	"net/http"
 	"strings"
 )
@@ -27,32 +25,6 @@ func NewTransactionHandler(txUseCase transaction.Fetcher, l logger.ILogger) tran
 }
 
 func (th *transactionHandler) ExploreTransactionsByRLP(c *gin.Context) {
-	//test
-	authToken := c.GetHeader("AUTH_TOKEN")
-	var user string
-	if authToken != "" {
-		// Verify and parse the JWT token
-		token, err := jwt.Parse(authToken, func(token *jwt.Token) (interface{}, error) {
-			// Replace "secret" with your own secret key used for signing the token
-			return []byte("secret"), nil
-		})
-
-		if err != nil || !token.Valid {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
-			return
-		}
-
-		// Retrieve the username from the token claims
-		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
-			return
-		}
-
-		user = claims["username"].(string)
-	}
-
-	//test
 	encodedRLP := c.Param("rlphex")
 	encodedRLP = strings.TrimPrefix(encodedRLP, "0x")
 	decoded, err := hex.DecodeString(encodedRLP)
@@ -82,13 +54,20 @@ func (th *transactionHandler) ExploreTransactionsByRLP(c *gin.Context) {
 		th.l.Infow("fetching transaction errors", "error", err)
 	}
 
+	if user, ok := c.Get("username"); ok {
+		username, isString := user.(string)
+		if isString {
+			th.txUseCase.CreateTransactionHistory(username, transactionHashes)
+		}
+	}
+
 	res := model.Transactions{
 		Transactions: txs,
 	}
 
+
 	th.l.Infow("transactions listed successfully", "rlp", encodedRLP)
 	c.IndentedJSON(http.StatusOK, res)
-	fmt.Printf("USER %s requested %v",user, transactionHashes)
 
 	return
 }

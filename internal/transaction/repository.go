@@ -9,6 +9,7 @@ type StoreFinder interface {
 
 type Storer interface {
 	Store(transactions *model.Transaction) error
+	StoreHashesPerUser(user,hash string) error
 }
 
 type Finder interface {

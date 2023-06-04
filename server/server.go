@@ -28,7 +28,7 @@ func Run() {
 	router := gin.Default()
 
 	router.GET("/lime/all", h.ExploreAllTransactions)
-	router.GET("/lime/eth/:rlphex", h.ExploreTransactionsByRLP)
+	router.GET("/lime/eth/:rlphex",AuthMiddleware(), h.ExploreTransactionsByRLP)
 
 	ar := repository2.NewAuthRepository(db)
 	auc := usecase2.NewAuthUseCase(l,ar)
