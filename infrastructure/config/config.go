@@ -39,13 +39,13 @@ func New() *Application {
 
 	key := os.Getenv("API_KEY")
 	if key == "" {
-		log.Fatal("API_KEY not set")
+		key = "jEvj-KdZ92ZUmX01Jpegiu52fpgEpE8_"
 	}
 	config.APIKey = key
 
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
-		log.Fatal("JWT_SECRET not set")
+		secret="secret"
 	}
 	config.JWTSecret = key
 
