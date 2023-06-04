@@ -1,6 +1,7 @@
 package server
 
 import (
+	"database/sql"
 	"eth_fetcher/infrastructure/api"
 	"eth_fetcher/infrastructure/config"
 	"eth_fetcher/infrastructure/database"
@@ -13,6 +14,7 @@ import (
 	"github.com/golang-jwt/jwt"
 	"log"
 	"net/http"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func Run() {
@@ -44,12 +46,25 @@ func Authenticate(c *gin.Context) {
 		return
 	}
 
-	// Check if the username and password are valid
-	password, exists := users[creds.Username]
-	if !exists || password != creds.Password {
+	hashedPW, err := getPasswordByUsername(creds.Username)
+	if err != nil {
+		log.Fatal("get pass:",err)
+	}
+
+	// Compare the entered password with the stored hashed password
+	err = bcrypt.CompareHashAndPassword([]byte(hashedPW), []byte(creds.Password))
+	if err != nil {
+		if err == bcrypt.ErrMismatchedHashAndPassword {
+			fmt.Println("err ", err)
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+
+			return
+		}
+		fmt.Println("err :", err)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
+
 
 	// Create a JWT token
 	token := jwt.New(jwt.SigningMethodHS256)
@@ -91,4 +106,26 @@ var users = map[string]string{
 	"bob":    "bob",
 	"carol":  "carol",
 	"dave":   "dave",
+}
+
+func getPasswordByUsername(username string) (string, error) {
+	db, err := sql.Open("postgres", "postgres://postgres:postgres@postgres:5432/postgres?sslmode=disable") // Replace "your-connection-string" with your actual PostgreSQL connection string
+	if err != nil {
+		return "", fmt.Errorf("failed to connect to the database: %v", err)
+	}
+	defer db.Close()
+
+	query := "SELECT password FROM users WHERE username = $1"
+	row := db.QueryRow(query, username)
+
+	var password string
+	err = row.Scan(&password)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", fmt.Errorf("user not found")
+		}
+		return "", fmt.Errorf("failed to retrieve password: %v", err)
+	}
+
+	return password, nil
 }
