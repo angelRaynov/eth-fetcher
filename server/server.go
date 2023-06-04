@@ -22,7 +22,7 @@ func Run() {
 	db := database.Init(cfg, l)
 
 	alchemy := api.NewAlchemyAPI(cfg, l)
-	tr := repository.NewTransactionRepository(db, l)
+	tr := repository.NewTransactionRepository(db)
 	tuc := usecase.NewTransactionUseCase(alchemy, tr, l)
 	h := httpHandler.NewTransactionHandler(tuc, l)
 	router := gin.Default()
@@ -30,7 +30,7 @@ func Run() {
 	router.GET("/lime/all", h.ExploreAllTransactions)
 	router.GET("/lime/eth/:rlphex", h.ExploreTransactionsByRLP)
 
-	ar := repository2.NewAuthRepository(db,l)
+	ar := repository2.NewAuthRepository(db)
 	auc := usecase2.NewAuthUseCase(l,ar)
 	ah := http2.NewAuthHandler(l, auc)
 	router.POST("/lime/authenticate",ah.Authenticate)

@@ -2,7 +2,6 @@ package repository
 
 import (
 	"database/sql"
-	"eth_fetcher/infrastructure/logger"
 	"eth_fetcher/internal/model"
 	"eth_fetcher/internal/transaction"
 	"eth_fetcher/internal/transaction/delivery/http"
@@ -18,13 +17,11 @@ const (
 
 type transactionRepository struct {
 	db *sql.DB
-	l  logger.ILogger
 }
 
-func NewTransactionRepository(db *sql.DB, l logger.ILogger) transaction.StoreFinder {
+func NewTransactionRepository(db *sql.DB) transaction.StoreFinder {
 	return &transactionRepository{
 		db: db,
-		l:  l,
 	}
 }
 
@@ -62,18 +59,12 @@ func (tr *transactionRepository) Store(transaction *model.Transaction) error {
 }
 
 func (tr *transactionRepository) FindAll() ([]*model.Transaction, error) {
-	err := tr.db.Ping()
-	if err != nil {
-		tr.l.Errorw("pinging database", "error", err)
-		return nil, fmt.Errorf("pinging database:%w", err)
-	}
-
 	var transactions []*model.Transaction
 
 	batchSize := 10
 	var totalCount int
 
-	err = tr.db.QueryRow(QueryCount).Scan(&totalCount)
+	err := tr.db.QueryRow(QueryCount).Scan(&totalCount)
 	if err != nil {
 		return nil, fmt.Errorf("counting records:%w", err)
 	}

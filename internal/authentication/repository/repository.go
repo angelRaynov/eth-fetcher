@@ -10,13 +10,11 @@ const QueryGetPassword = `SELECT password FROM users WHERE username = $1`
 
 type AuthRepository struct {
 	db *sql.DB
-	l  logger.ILogger
 }
 
-func NewAuthRepository(db *sql.DB, l logger.ILogger) *AuthRepository {
+func NewAuthRepository(db *sql.DB) *AuthRepository {
 	return &AuthRepository{
 		db: db,
-		l:  l,
 	}
 }
 
